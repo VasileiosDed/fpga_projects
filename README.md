@@ -414,3 +414,178 @@ begin
 
 end arc;
 
+# fpga_projects
+# Lab4_FPGA
+
+# Programma 1
+
+library ieee;
+use ieee.std_logic_1164.all;
+
+entity instr_decoder is
+  port(
+    Din  : in  std_logic_vector(3 downto 0);
+    Dout : out std_logic_vector(15 downto 0)
+  );
+end instr_decoder;
+
+architecture beh of instr_decoder is
+begin
+  process(Din)
+  begin
+    Dout <= (others => '0');
+    case Din is
+      when "0000" => Dout(0)  <= '1';
+      when "0001" => Dout(1)  <= '1';
+      when "0010" => Dout(2)  <= '1';
+      when "0011" => Dout(3)  <= '1';
+      when "0100" => Dout(4)  <= '1';
+      when "0101" => Dout(5)  <= '1';
+      when "0110" => Dout(6)  <= '1';
+      when "0111" => Dout(7)  <= '1';
+      when "1000" => Dout(8)  <= '1';
+      when "1001" => Dout(9)  <= '1';
+      when "1010" => Dout(10) <= '1';
+      when "1011" => Dout(11) <= '1';
+      when "1100" => Dout(12) <= '1';
+      when "1101" => Dout(13) <= '1';
+      when "1110" => Dout(14) <= '1';
+      when others => Dout(15) <= '1';
+    end case;
+  end process;
+end beh;
+
+# Programma 2
+
+library ieee;
+use ieee.std_logic_1164.all;
+
+entity state_decoder is
+  port(
+    Din  : in  std_logic_vector(2 downto 0);
+    Dout : out std_logic_vector(7 downto 0)
+  );
+end state_decoder;
+
+architecture beh of state_decoder is
+begin
+  process(Din)
+  begin
+    Dout <= (others => '0');
+    case Din is
+      when "000" => Dout(0) <= '1';
+      when "001" => Dout(1) <= '1';
+      when "010" => Dout(2) <= '1';
+      when "011" => Dout(3) <= '1';
+      when "100" => Dout(4) <= '1';
+      when "101" => Dout(5) <= '1';
+      when "110" => Dout(6) <= '1';
+      when others => Dout(7) <= '1';
+    end case;
+  end process;
+end beh;
+
+# Programma 3
+
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.std_logic_unsigned.all;
+
+entity counter3 is
+  port(
+    clock : in  std_logic;
+    rst   : in  std_logic;
+    inc   : in  std_logic;
+    count : out std_logic_vector(2 downto 0)
+  );
+end counter3;
+
+architecture beh of counter3 is
+  signal cnt : std_logic_vector(2 downto 0);
+begin
+  process(clock, rst)
+  begin
+    if rst = '1' then
+      cnt <= "000";
+    elsif rising_edge(clock) then
+      if inc = '1' then
+        cnt <= cnt + 1;
+      end if;
+    end if;
+  end process;
+
+  count <= cnt;
+end beh;
+
+# Programma 4
+
+library ieee;
+use ieee.std_logic_1164.all;
+
+package hardwiredlib is
+
+  component instr_decoder
+    port(
+      Din  : in  std_logic_vector(3 downto 0);
+      Dout : out std_logic_vector(15 downto 0)
+    );
+  end component;
+
+  component state_decoder
+    port(
+      Din  : in  std_logic_vector(2 downto 0);
+      Dout : out std_logic_vector(7 downto 0)
+    );
+  end component;
+
+  component counter3
+    port(
+      clock : in  std_logic;
+      rst   : in  std_logic;
+      inc   : in  std_logic;
+      count : out std_logic_vector(2 downto 0)
+    );
+  end component;
+
+end hardwiredlib;
+
+# Programma 5
+
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.std_logic_unsigned.all;
+
+library lpm;
+use lpm.lpm_components.all;
+
+use work.hardwiredlib.all;
+
+entity hardwired is
+  port(
+    ir             : in  std_logic_vector(3 downto 0);
+    clock, reset   : in  std_logic;
+    z              : in  std_logic;
+    mOPs           : out std_logic_vector(26 downto 0)
+  );
+end hardwired;
+
+architecture arc of hardwired is
+
+  signal I     : std_logic_vector(15 downto 0);
+  signal T     : std_logic_vector(7 downto 0);
+  signal count : std_logic_vector(2 downto 0);
+  signal inc, clr : std_logic;
+
+begin
+
+  ID : instr_decoder port map(ir, I);
+  SD : state_decoder port map(count, T);
+  CNT : counter3 port map(clock, clr, inc, count);
+
+  clr <= T(7) or T(6);
+  inc <= not clr;
+
+  mOPs <= (others => '0');
+
+end arc;
+
