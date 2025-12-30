@@ -1,0 +1,480 @@
+# Programma 1
+
+library ieee ;
+use ieee.std_logic_1164.all ;
+
+entity alus IS
+  port(
+    rbus,acload,zload,andop : in std_logic;
+    orop,notop,xorop,aczero : in std_logic;
+    acinc,plus,minus,drbus  : in std_logic;
+    alus                    : out std_logic_vector(6 downto 0)
+  );
+end alus ;
+
+architecture arc of alus is
+  signal control : std_logic_vector(11 downto 0);
+begin
+  control <= rbus & drbus & acload & zload & andop & orop
+             & notop & xorop & aczero & acinc & plus & minus ;
+
+  process(control)
+  begin
+    case control is
+      WHEN "101110000000" => alus <= "1000000" ; -- AND
+      WHEN "101101000000" => alus <= "1100000" ; -- OR
+      WHEN "001100100000" => alus <= "1110000" ; -- NOT
+      WHEN "101100010000" => alus <= "1010000" ; -- XOR
+      WHEN "001100001000" => alus <= "0000000" ; -- CLAC
+      WHEN "001100000100" => alus <= "0001001" ; -- INAC
+      WHEN "101100000010" => alus <= "0000101" ; -- ADD
+      WHEN "101100000001" => alus <= "0001011" ; -- SUB
+      WHEN "101100000000" => alus <= "0000100" ; -- MOVR
+      WHEN "011100000000" => alus <= "0000100" ; -- LDAC5
+      WHEN others         => alus <= "1111111" ; -- NO OPERATION
+    end case;
+  end process;
+end arc ;
+
+
+
+
+
+# Programma 2
+
+library ieee;
+use ieee.std_logic_1164.all;
+
+entity data_bus is
+  port(
+    ac_out   : in  std_logic_vector(7 downto 0);
+    dr_out   : in  std_logic_vector(7 downto 0);
+    r_out    : in  std_logic_vector(7 downto 0);
+    tr_out   : in  std_logic_vector(7 downto 0);
+    mem_out  : in  std_logic_vector(7 downto 0);
+
+    acbus    : in  std_logic;
+    drbus    : in  std_logic;
+    rbus     : in  std_logic;
+    trbus    : in  std_logic;
+    membus   : in  std_logic;
+
+    bus      : out std_logic_vector(7 downto 0)
+  );
+end entity;
+
+architecture rtl of data_bus is
+begin
+  -- MUX-υλοποίηση (αντί για tri-state), για καθαρή προσομοίωση.
+  process(ac_out, dr_out, r_out, tr_out, mem_out, acbus, drbus, rbus, trbus, membus)
+  begin
+    bus <= (others => '0');
+
+    if membus = '1' then
+      bus <= mem_out;
+    elsif drbus = '1' then
+      bus <= dr_out;
+    elsif acbus = '1' then
+      bus <= ac_out;
+    elsif rbus = '1' then
+      bus <= r_out;
+    elsif trbus = '1' then
+      bus <= tr_out;
+    else
+      bus <= (others => '0');
+    end if;
+  end process;
+end architecture;
+
+# Programma 3
+
+WIDTH=8;
+DEPTH=256;
+
+ADDRESS_RADIX=DEC;
+DATA_RADIX=BIN;
+
+CONTENT BEGIN
+    0   :   00000001; -- LDAC
+    1   :   00101000; -- 28H
+    2   :   00000000; -- 00H
+    3   :   00000010; -- STAC
+    4   :   00101011; -- 2BH
+    5   :   00000000; -- 00H
+    6   :   00000011; -- MVAC
+    7   :   00001010; -- INAC
+    8   :   00001111; -- NOT
+    9   :   00001110; -- XOR
+    10  :   00001000; -- ADD
+    11  :   00001001; -- SUB
+    12  :   00000100; -- MOVR
+    13  :   00000101; -- JUMP
+    14  :   00011000; -- 18H
+    [15..23]  :   00000000;
+    24  :   00000111; -- JPNZ
+    25  :   00100000; -- 20H
+    26  :   00000000; -- 00H
+    27  :   00001111; -- NOT
+    28  :   00000111; -- JPNZ
+    [29..31]  :   00000000;
+    32  :   00001011; -- CLAC
+    33  :   00000110; -- JMPZ
+    34  :   00011000; -- 18H
+    [35..39]  :   00000000;
+    40  :   01111010; -- 7AH
+    [41..255] :   00000000;
+END;
+
+
+# Programma 4
+
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+entity extRAM is
+  port(
+    clock   : in  std_logic;
+    wren    : in  std_logic;
+    address : in  std_logic_vector(7 downto 0);  -- 256 θέσεις
+    data_in : in  std_logic_vector(7 downto 0);
+    data_out: out std_logic_vector(7 downto 0)
+  );
+end entity;
+
+architecture rtl of extRAM is
+  type ram_t is array(0 to 255) of std_logic_vector(7 downto 0);
+  signal ram : ram_t := (others => (others => '0'));
+begin
+  -- Ασύγχρονη ανάγνωση (εύκολο σε waveform simulation)
+  data_out <= ram(to_integer(unsigned(address)));
+
+  process(clock)
+  begin
+    if rising_edge(clock) then
+      if wren = '1' then
+        ram(to_integer(unsigned(address))) <= data_in;
+      end if;
+    end if;
+  end process;
+
+  -- ΣΗΜΕΙΩΣΗ:
+  -- Για initialization από extRAM.mif σε Quartus:
+  -- 1) φτιάχνεις RAM:1-PORT με lpm_file="extRAM.mif"
+  -- 2) ή κάνεις Memory Initialization στο project.
+end architecture;
+
+# Porgramma 5
+
+library ieee;
+use ieee.std_logic_1164.all;
+
+package cpulib is
+
+  component data_bus is
+    port(
+      ac_out  : in  std_logic_vector(7 downto 0);
+      dr_out  : in  std_logic_vector(7 downto 0);
+      r_out   : in  std_logic_vector(7 downto 0);
+      tr_out  : in  std_logic_vector(7 downto 0);
+      mem_out : in  std_logic_vector(7 downto 0);
+      acbus   : in  std_logic;
+      drbus   : in  std_logic;
+      rbus    : in  std_logic;
+      trbus   : in  std_logic;
+      membus  : in  std_logic;
+      bus     : out std_logic_vector(7 downto 0)
+    );
+  end component;
+
+  component extRAM is
+    port(
+      clock    : in  std_logic;
+      wren     : in  std_logic;
+      address  : in  std_logic_vector(7 downto 0);
+      data_in  : in  std_logic_vector(7 downto 0);
+      data_out : out std_logic_vector(7 downto 0)
+    );
+  end component;
+
+end package;
+
+package body cpulib is
+end package body;
+
+# Programma 6
+
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+use work.cpulib.all;
+
+entity rs_cpu is
+  port(
+    ARdata,PCdata  : buffer std_logic_vector(15 downto 0);
+    DRdata,ACdata  : buffer std_logic_vector(7 downto 0);
+    IRdata,TRdata  : buffer std_logic_vector(7 downto 0);
+    RRdata         : buffer std_logic_vector(7 downto 0);
+    ZRdata         : buffer std_logic;
+
+    clock,reset    : in std_logic;
+
+    mOP            : buffer std_logic_vector(26 downto 0);
+    addressBus     : buffer std_logic_vector(15 downto 0);
+    dataBus        : buffer std_logic_vector(7 downto 0)
+  );
+end rs_cpu;
+
+architecture arc of rs_cpu is
+  -- RAM
+  signal mem_wren  : std_logic;
+  signal mem_addr8 : std_logic_vector(7 downto 0);
+  signal mem_dout  : std_logic_vector(7 downto 0);
+
+  -- Bus enables
+  signal acbus, drbus, rbus, trbus, membus : std_logic;
+
+  -- Internal bus wire
+  signal ibus : std_logic_vector(7 downto 0);
+
+  -- FSM
+  type state_t is (
+    S_RESET,
+    S_FETCH1, S_FETCH2,
+    S_DECODE,
+
+    -- operand fetch (16-bit address: low then high)
+    S_OP_LO, S_OP_HI,
+
+    -- memory read/write data steps
+    S_MEM_READ1, S_MEM_READ2,
+    S_MEM_WRITE1,
+
+    S_EXEC_ALU,
+    S_JUMP
+  );
+  signal st : state_t;
+
+  -- temp address latch (16-bit)
+  signal op_addr : std_logic_vector(15 downto 0);
+
+  -- opcode constants (όπως στο extRAM.mif)
+  constant OP_LDAC : std_logic_vector(7 downto 0) := x"01";
+  constant OP_STAC : std_logic_vector(7 downto 0) := x"02";
+  constant OP_MVAC : std_logic_vector(7 downto 0) := x"03";
+  constant OP_MOVR : std_logic_vector(7 downto 0) := x"04";
+  constant OP_JUMP : std_logic_vector(7 downto 0) := x"05";
+  constant OP_JMPZ : std_logic_vector(7 downto 0) := x"06";
+  constant OP_JPNZ : std_logic_vector(7 downto 0) := x"07";
+  constant OP_ADD  : std_logic_vector(7 downto 0) := x"08";
+  constant OP_SUB  : std_logic_vector(7 downto 0) := x"09";
+  constant OP_INAC : std_logic_vector(7 downto 0) := x"0A";
+  constant OP_CLAC : std_logic_vector(7 downto 0) := x"0B";
+  constant OP_XOR  : std_logic_vector(7 downto 0) := x"0E";
+  constant OP_NOT  : std_logic_vector(7 downto 0) := x"0F";
+
+begin
+  -- Instantiate memory (256x8). Χρησιμοποιούμε τα 8 LSBs της addressBus.
+  mem_addr8 <= addressBus(7 downto 0);
+
+  U_RAM: extRAM
+    port map(
+      clock    => clock,
+      wren     => mem_wren,
+      address  => mem_addr8,
+      data_in  => ibus,     -- όταν γράφουμε, γράφουμε από bus
+      data_out => mem_dout
+    );
+
+  -- Instantiate internal data bus
+  U_BUS: data_bus
+    port map(
+      ac_out  => ACdata,
+      dr_out  => DRdata,
+      r_out   => RRdata,
+      tr_out  => TRdata,
+      mem_out => mem_dout,
+      acbus   => acbus,
+      drbus   => drbus,
+      rbus    => rbus,
+      trbus   => trbus,
+      membus  => membus,
+      bus     => ibus
+    );
+
+  dataBus <= ibus;
+  addressBus <= ARdata;
+
+  -- Simple Z flag based on AC
+  ZRdata <= '1' when ACdata = x"00" else '0';
+
+  -- Micro-ops visibility (για waveform): πολύ απλό encoding
+  -- [3:0] state (χοντρικά), μερικά control bits
+  process(st, acbus, drbus, rbus, trbus, membus, mem_wren)
+    function st2slv(s: state_t) return std_logic_vector is
+    begin
+      case s is
+        when S_RESET     => return "0000";
+        when S_FETCH1    => return "0001";
+        when S_FETCH2    => return "0010";
+        when S_DECODE    => return "0011";
+        when S_OP_LO     => return "0100";
+        when S_OP_HI     => return "0101";
+        when S_MEM_READ1 => return "0110";
+        when S_MEM_READ2 => return "0111";
+        when S_MEM_WRITE1=> return "1000";
+        when S_EXEC_ALU  => return "1001";
+        when S_JUMP      => return "1010";
+      end case;
+    end;
+  begin
+    mOP <= (others => '0');
+    mOP(3 downto 0) <= st2slv(st);
+    mOP(4)  <= acbus;
+    mOP(5)  <= drbus;
+    mOP(6)  <= rbus;
+    mOP(7)  <= trbus;
+    mOP(8)  <= membus;
+    mOP(9)  <= mem_wren;
+  end process;
+
+  -- Control + Datapath
+  process(clock, reset)
+  begin
+    if reset = '1' then
+      ARdata   <= (others => '0');
+      PCdata   <= (others => '0');
+      DRdata   <= (others => '0');
+      IRdata   <= (others => '0');
+      ACdata   <= (others => '0');
+      TRdata   <= (others => '0');
+      RRdata   <= (others => '0');
+      op_addr  <= (others => '0');
+
+      acbus    <= '0'; drbus <= '0'; rbus <= '0'; trbus <= '0'; membus <= '0';
+      mem_wren <= '0';
+      st       <= S_RESET;
+
+    elsif rising_edge(clock) then
+      -- defaults κάθε κύκλο
+      acbus    <= '0'; drbus <= '0'; rbus <= '0'; trbus <= '0'; membus <= '0';
+      mem_wren <= '0';
+
+      case st is
+        when S_RESET =>
+          st <= S_FETCH1;
+
+        -- FETCH1: AR <- PC
+        when S_FETCH1 =>
+          ARdata <= PCdata;
+          st <= S_FETCH2;
+
+        -- FETCH2: DR <- M[AR], PC <- PC+1, IR <- DR
+        when S_FETCH2 =>
+          membus <= '1';
+          DRdata <= mem_dout;
+          IRdata <= mem_dout;
+          PCdata <= std_logic_vector(unsigned(PCdata) + 1);
+          st <= S_DECODE;
+
+        when S_DECODE =>
+          -- Εντολές με 16-bit διεύθυνση operand: opcode, low, high
+          if (IRdata = OP_LDAC) or (IRdata = OP_STAC) or (IRdata = OP_JUMP) or
+             (IRdata = OP_JMPZ) or (IRdata = OP_JPNZ) then
+            st <= S_OP_LO;
+
+          elsif (IRdata = OP_MVAC) or (IRdata = OP_MOVR) or
+                (IRdata = OP_ADD)  or (IRdata = OP_SUB)  or
+                (IRdata = OP_XOR)  or (IRdata = OP_NOT)  or
+                (IRdata = OP_INAC) or (IRdata = OP_CLAC) then
+            st <= S_EXEC_ALU;
+
+          else
+            -- NOP/άγνωστο
+            st <= S_FETCH1;
+          end if;
+
+        -- operand low byte fetch
+        when S_OP_LO =>
+          ARdata <= PCdata;
+          membus <= '1';
+          TRdata <= mem_dout; -- low byte
+          PCdata <= std_logic_vector(unsigned(PCdata) + 1);
+          st <= S_OP_HI;
+
+        -- operand high byte fetch
+        when S_OP_HI =>
+          ARdata <= PCdata;
+          membus <= '1';
+          DRdata <= mem_dout; -- high byte
+          PCdata <= std_logic_vector(unsigned(PCdata) + 1);
+
+          op_addr <= mem_dout & TRdata; -- high & low
+          st <= S_MEM_READ1;
+
+        -- κοινό βήμα: βάζουμε AR = operand address
+        when S_MEM_READ1 =>
+          ARdata <= op_addr;
+
+          if IRdata = OP_LDAC then
+            st <= S_MEM_READ2;
+          elsif IRdata = OP_STAC then
+            st <= S_MEM_WRITE1;
+          else
+            -- jump / conditional
+            st <= S_JUMP;
+          end if;
+
+        when S_MEM_READ2 =>
+          -- AC <- M[AR]
+          membus <= '1';
+          ACdata <= mem_dout;
+          st <= S_FETCH1;
+
+        when S_MEM_WRITE1 =>
+          -- M[AR] <- AC
+          acbus    <= '1';
+          mem_wren <= '1';
+          st <= S_FETCH1;
+
+        when S_JUMP =>
+          if IRdata = OP_JUMP then
+            PCdata <= op_addr;
+          elsif IRdata = OP_JMPZ then
+            if ZRdata = '1' then
+              PCdata <= op_addr;
+            end if;
+          elsif IRdata = OP_JPNZ then
+            if ZRdata = '0' then
+              PCdata <= op_addr;
+            end if;
+          end if;
+          st <= S_FETCH1;
+
+        when S_EXEC_ALU =>
+          if IRdata = OP_MVAC then
+            RRdata <= ACdata;         -- R <- AC
+          elsif IRdata = OP_MOVR then
+            ACdata <= RRdata;         -- AC <- R
+          elsif IRdata = OP_ADD then
+            ACdata <= std_logic_vector(unsigned(ACdata) + unsigned(RRdata));
+          elsif IRdata = OP_SUB then
+            ACdata <= std_logic_vector(unsigned(ACdata) - unsigned(RRdata));
+          elsif IRdata = OP_XOR then
+            ACdata <= ACdata xor RRdata;
+          elsif IRdata = OP_NOT then
+            ACdata <= not ACdata;
+          elsif IRdata = OP_INAC then
+            ACdata <= std_logic_vector(unsigned(ACdata) + 1);
+          elsif IRdata = OP_CLAC then
+            ACdata <= (others => '0');
+          end if;
+
+          st <= S_FETCH1;
+
+      end case;
+    end if;
+  end process;
+
+end architecture;
+
